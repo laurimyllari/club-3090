@@ -1,24 +1,30 @@
 healthCheckTimeout: 1800
-logLevel: info
+logLevel: debug
+logToStdout: "both"
 metricsMaxInMemory: 1000
 sendLoadingState: true
 includeAliasesInList: true
 
+macros:
+  "llama-cmd": >
+    /app/llama-server
+    --model /models/qwen3.6-27b-gguf/ubergarm-iq4ks/Qwen3.6-27B-MTP-IQ4_KS.gguf
+    --port 9999
+    --parallel 1
+    --webui llamacpp
+    --jinja
+    --ctx-size 160000
+    --merge-qkv
+    -ngl 999 --threads-batch 1
+    -ctk q8_0 -ctv q8_0
+    --recurrent-ckpt-mode auto
+    --chat-template-file /models/qwen3.6-27b-gguf/chat_template-v11.jinja
+
 models:
   "qwen3.6-27b":
     proxy: "http://127.0.0.1:9999"
-    cmd: >
-      /app/llama-server
-      --model /models/qwen3.6-27b-gguf/ubergarm-iq4ks/Qwen3.6-27B-MTP-IQ4_KS.gguf
-      --port 9999
-      --parallel 1
-      --webui llamacpp
-      --jinja
-      --ctx-size 12288
-      -fa on
-      --merge-qkv
-      -ngl 999 --threads-batch 1
-      -ctk q8_0 -ctv q8_0
+    cmd: |
+      ${llama-cmd}
     ttl: 3600
     filters:
       # Clients won't be able to override these parameters
@@ -32,6 +38,8 @@ models:
         min_p: 0.0
         presence_penalty: 0.0
         repeat_penalty: 1.0
+        chat_template_kwargs:
+          preserve_thinking: true
 
       setParamsByID:
         # Thinking mode, precise coding tasks (WebDev, code generation)
@@ -46,3 +54,92 @@ models:
           chat_template_kwargs:
             enable_thinking: false
 
+  "qwen3.6-27b-mtp":
+    proxy: "http://127.0.0.1:9999"
+    cmd: |
+      ${llama-cmd}
+      -mtp
+      --draft-max 4
+      --draft-p-min 0.75
+    ttl: 3600
+    filters:
+      # Clients won't be able to override these parameters
+      stripParams: "temperature, top_p, top_k, presence_penalty, repeat_penalty, min_p"
+
+      # Baseline sampling params (thinking mode, general tasks)
+      setParams:
+        temperature: 1.0
+        top_p: 0.95
+        top_k: 20
+        min_p: 0.0
+        presence_penalty: 0.0
+        repeat_penalty: 1.0
+        chat_template_kwargs:
+          preserve_thinking: true
+
+      setParamsByID:
+        # Thinking mode, precise coding tasks (WebDev, code generation)
+        "${MODEL_ID}:code":
+          temperature: 0.6
+          chat_template_kwargs:
+            preserve_thinking: true
+
+        # Instruct (non-thinking) mode — general tasks, fast conversational responses
+        "${MODEL_ID}:instruct":
+          temperature: 0.7
+          top_p: 0.8
+          presence_penalty: 1.5
+          chat_template_kwargs:
+            enable_thinking: false
+
+        # Instruct (non-thinking) mode — structured reasoning (math, logic, step-by-step)
+        "${MODEL_ID}:reason":
+          temperature: 1.0
+          presence_penalty: 1.5
+          chat_template_kwargs:
+            enable_thinking: false
+
+  "qwen3.6-35b-a3b":
+    proxy: "http://127.0.0.1:9999"
+    cmd: |
+      /app/llama-server
+      --model /models/qwen3.6-35b-a3b-gguf/thireus-4.2574bpw/Qwen3.6-35B-A3B.WEB_USER-4.2574bpw-17GB-GGUF_17GB-GPU_0GB-CPU.c636b0e_2194a4d.gguf
+      --mmproj /models/qwen3.6-35b-a3b-gguf/mmproj-BF16.gguf
+      --port 9999
+      --parallel 1
+      --webui llamacpp
+      --jinja
+      --ctx-size 160000
+      --merge-qkv
+      -ngl 999 --threads-batch 1
+      -ctk q8_0 -ctv q8_0
+      --recurrent-ckpt-mode auto
+      --chat-template-file /models/qwen3.6-27b-gguf/chat_template-v11.jinja
+    ttl: 3600
+    filters:
+      # Clients won't be able to override these parameters
+      stripParams: "temperature, top_p, top_k, presence_penalty, repeat_penalty, min_p"
+
+      # Baseline sampling params (thinking mode, general tasks)
+      setParams:
+        temperature: 1.0
+        top_p: 0.95
+        top_k: 20
+        min_p: 0.0
+        presence_penalty: 1.5
+        repeat_penalty: 1.0
+        chat_template_kwargs:
+          preserve_thinking: true
+
+      setParamsByID:
+        # Thinking mode, precise coding tasks (WebDev, code generation)
+        "${MODEL_ID}:code":
+          temperature: 0.6
+          presence_penalty: 0.0
+
+        # Instruct (non-thinking) mode — general tasks, fast conversational responses
+        "${MODEL_ID}:instruct":
+          temperature: 0.7
+          top_p: 0.8
+          chat_template_kwargs:
+            enable_thinking: false
