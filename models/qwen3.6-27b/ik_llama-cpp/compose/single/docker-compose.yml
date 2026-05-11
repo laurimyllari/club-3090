@@ -1,0 +1,132 @@
+# ===========================================================================
+# Profile (at-a-glance):
+#   Model:     Qwen3.6-27B (Ubergarm IQ4_K_S GGUF)
+#   Engine:    ik-llama.cpp (NOT vLLM — different engine, different memory model)
+#   Topology:  Single 3090 (TP=1)
+#   Drafter:   MTP
+#   KV:        q4_0 (4-bit packed)
+#   Vision:    no (not yet available with MTP)
+#   Max ctx:   262K (full model native — no Cliff 1 / Cliff 2)
+#   Genesis:   N/A — ik-llama.cpp engine; Genesis is vLLM/Qwen3-Next-specific
+#   Status:    🥼 Development
+#   Best for:  
+# ---------------------------------------------------------------------------
+# Qwen3.6-27B on ik-llama.cpp — single 3090, full 262K context, MTP.
+#
+# Bench (canonical narrative + code prompt) numbers — see BENCHMARKS.md.
+#
+# Quick start:
+#   1. Get the GGUF + mmproj:
+#        hf download ubergarm/Qwen3.6-27B-GGUF \
+#          --include "Qwen3.6-27B-MTP-IQ4_KS.gguf" \
+#          --local-dir $MODEL_DIR/qwen3.6-27b-gguf/ubergarm-iq4ks
+#   2. From this directory:
+#        MODEL_DIR=/your/models/dir docker compose up -d
+#   3. curl http://localhost:8020/v1/models  → should list the model.
+#
+# Override defaults via .env or shell:
+#   MODEL_DIR              host dir to mount as /models  (default: ../../../../models-cache for repo, /path/to/your/models on your stack)
+#   GGUF_FILE              path under /models  (default: qwen3.6-27b-gguf/ubergarm-iq4ks/Qwen3.6-27B-MTP-IQ4_KS.gguf)
+#   MMPROJ_FILE            path under /models  (default: qwen3.6-27b-gguf/mmproj-F16.gguf)
+#   CTX_SIZE               total KV pool       (default: 262144)
+#   KV_TYPE                K and V quant type  (default: q4_0)
+#   REASONING_FORMAT       reasoning channel routing (default: none — for opencode/IDE-agent compat)
+#                          Override to `auto` to get separate `reasoning_content` field
+#                          (Qwen3.6 thinking trace) — useful for clients that render
+#                          reasoning_content (most don't). Issue: club-3090#97.
+#   DISABLE_THINKING       default: 1 (thinking OFF). Set to 0 to opt INTO thinking
+#                          which forces empty <think></think> blocks in responses. Useful for
+#                          clients (e.g. opencode) that display <think> content as the response.
+#                          Tradeoff: applies to ALL clients on this server — Hermes/agents that
+#                          use thinking lose reasoning capability. Issue: club-3090#97.
+#   PORT                   host port           (default: 8020)
+#   CUDA_VISIBLE_DEVICES   which GPU to use    (default: 0)
+#
+# ─── opencode / IDE-agent compatibility (issue #97) ───
+# `--reasoning-format none` is the default because Qwen3.6's thinking mode
+# emits `<think>...</think>` blocks that llama.cpp's peg-native parser routes
+# to the OpenAI `reasoning_content` field by default. opencode (and most simple
+# OpenAI-compat clients) ignore `reasoning_content` and wait for `content`,
+# causing indefinite client hangs even though the server returns 200 cleanly.
+# `--reasoning-format none` collapses thinking into the content stream so all
+# clients work. Power users wanting reasoning_content separation: set
+# `REASONING_FORMAT=auto` in .env or shell.
+
+services:
+  ik-llama-cpp-qwen36-27b:
+    image: ghcr.io/ikawrakow/ik-llama-cpp:cu13-server-4480
+    container_name: ik-llama-cpp-qwen36-27b
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8020}:8080"
+    volumes:
+      - "${MODEL_DIR:-../../../../../models-cache}:/models:ro"
+    entrypoint:
+      - bash
+      - -c
+      - |
+        set -e
+        # DISABLE_THINKING=1 (default) appends --chat-template-kwargs to disable
+        # Qwen3 thinking server-side. Forces the chat template to insert empty
+        # <think></think> blocks → output goes straight to the response. Useful for
+        # clients (e.g. opencode) that display <think> content as the response.
+        # Tradeoff: applies to ALL clients on this server instance — Hermes/agents that
+        # use thinking lose reasoning capability. See docs/HARDWARE.md and disc club-3090#97.
+        # Note: $$VAR is YAML-escape for $VAR (compose passes literal $ to bash).
+        EXTRA_ARGS=()
+        if [ "${DISABLE_THINKING:-1}" = "1" ]; then
+          EXTRA_ARGS+=("--chat-template-kwargs" '{"enable_thinking":false}')
+          echo "[entrypoint] DISABLE_THINKING=1 — chat template will produce empty <think></think>"
+        fi
+        if [ "${PRESERVE_THINKING:-0}" = "1" ]; then
+          EXTRA_ARGS+=("--chat-template-kwargs" '{"preserve_thinking":true}')
+          echo "[entrypoint] PRESERVE_THINKING=1 — thinking content from all preceding turns is preserved in messages"
+        fi
+        exec /app/llama-server "$$@" "$${EXTRA_ARGS[@]}"
+      - --
+    command:
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8080"
+      - -m
+      - /models/${GGUF_FILE:-qwen3.6-27b-gguf/ubergarm-iq4ks/Qwen3.6-27B-MTP-IQ4_KS.gguf}
+      # MTP does not work with --mmproj yet
+      # - --mmproj
+      # - /models/${MMPROJ_FILE:-qwen3.6-27b-gguf/mmproj-F16.gguf}
+      - -c
+      - ${CTX_SIZE:-262144}
+      # Merge Q, K, V tensors into a single, contiguous QKV tensor while loading the model
+      # Merging can only be done if the quantization types of Q, K and V are the same.
+      # The upside of doing this is better TG GPU performance as this reduces the number of kernel launches.
+      # The downside is that mmap cannot be used because the merged tensor cannot be memory mapped to the model file (as there are gaps between the Q, K, V tensors).
+      # (https://github.com/ikawrakow/ik_llama.cpp/pull/878)
+      - --merge-qkv
+      # Multi token prediction
+      - -mtp
+      - --draft-max
+      - "4"
+      - --draft-p-min
+      - "0.75"
+      - --recurrent-ckpt-mode
+      - auto
+      - -ngl
+      - "99"
+      - --cache-type-k
+      - ${KV_TYPE:-q4_0}
+      - --cache-type-v
+      - ${KV_TYPE:-q4_0}
+      - -np
+      - "1"
+      - --jinja
+      - --reasoning-format
+      - ${REASONING_FORMAT:-none}
+      - --chat-template-file
+      - /models/qwen3.6-27b-gguf/chat_template-v11.jinja
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["${CUDA_VISIBLE_DEVICES:-0}"]
+              capabilities: [compute, utility]
