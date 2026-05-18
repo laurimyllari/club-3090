@@ -8,28 +8,30 @@ includeAliasesInList: true
 macros:
   "llama-cmd": >
     /app/llama-server
-    --model /models/qwen3.6-27b-gguf/ubergarm-iq4ks/Qwen3.6-27B-MTP-IQ4_KS.gguf
     --port 9999
     --parallel 1
     --webui llamacpp
     --jinja
-    --ctx-size 160000
+    --ctx-checkpoints 8
+    --ctx-checkpoints-interval 8192
     --merge-qkv
     -ngl 999 --threads-batch 1
-    -ctk q8_0 -ctv q8_0
     --recurrent-ckpt-mode auto
-    --chat-template-file /models/qwen3.6-27b-gguf/chat_template-v11.jinja
+    --chat-template-file /models/qwen3.6-27b-gguf/chat_template-v19.jinja
+    --reasoning-format deepseek
+    --reasoning-budget 16384
 
 models:
   "qwen3.6-27b":
     proxy: "http://127.0.0.1:9999"
     cmd: |
       ${llama-cmd}
+      --model /models/qwen3.6-27b-gguf/ubergarm-iq4ks/Qwen3.6-27B-MTP-IQ4_KS.gguf
+      --mmproj /models/qwen3.6-27b-gguf/mmproj-F16.gguf
+      --ctx-size 160000
+      -ctk q8_0 -ctv q8_0
     ttl: 3600
     filters:
-      # Clients won't be able to override these parameters
-      stripParams: "temperature, top_p, top_k, presence_penalty, repeat_penalty, min_p"
-
       # Baseline sampling params (thinking mode, general tasks)
       setParams:
         temperature: 1.0
@@ -38,13 +40,14 @@ models:
         min_p: 0.0
         presence_penalty: 0.0
         repeat_penalty: 1.0
-        chat_template_kwargs:
-          preserve_thinking: true
 
       setParamsByID:
         # Thinking mode, precise coding tasks (WebDev, code generation)
         "${MODEL_ID}:code":
           temperature: 0.6
+          parallel_tool_calls: true
+          chat_template_kwargs:
+            preserve_thinking: true
 
         # Instruct (non-thinking) mode — general tasks, fast conversational responses
         "${MODEL_ID}:instruct":
@@ -58,14 +61,15 @@ models:
     proxy: "http://127.0.0.1:9999"
     cmd: |
       ${llama-cmd}
+      --model /models/qwen3.6-27b-gguf/ubergarm-iq4ks/Qwen3.6-27B-MTP-IQ4_KS.gguf
+      --ctx-size 160000
+      -ctk q8_0 -ctv q8_0
       -mtp
+      # https://github.com/ikawrakow/ik_llama.cpp/pull/1780
       --draft-max 4
-      --draft-p-min 0.75
+      --draft-p-min 0
     ttl: 3600
     filters:
-      # Clients won't be able to override these parameters
-      stripParams: "temperature, top_p, top_k, presence_penalty, repeat_penalty, min_p"
-
       # Baseline sampling params (thinking mode, general tasks)
       setParams:
         temperature: 1.0
@@ -74,13 +78,12 @@ models:
         min_p: 0.0
         presence_penalty: 0.0
         repeat_penalty: 1.0
-        chat_template_kwargs:
-          preserve_thinking: true
 
       setParamsByID:
         # Thinking mode, precise coding tasks (WebDev, code generation)
         "${MODEL_ID}:code":
           temperature: 0.6
+          parallel_tool_calls: true
           chat_template_kwargs:
             preserve_thinking: true
 
@@ -102,24 +105,13 @@ models:
   "qwen3.6-35b-a3b":
     proxy: "http://127.0.0.1:9999"
     cmd: |
-      /app/llama-server
+      ${llama-cmd}
       --model /models/qwen3.6-35b-a3b-gguf/thireus-4.2574bpw/Qwen3.6-35B-A3B.WEB_USER-4.2574bpw-17GB-GGUF_17GB-GPU_0GB-CPU.c636b0e_2194a4d.gguf
       --mmproj /models/qwen3.6-35b-a3b-gguf/mmproj-BF16.gguf
-      --port 9999
-      --parallel 1
-      --webui llamacpp
-      --jinja
       --ctx-size 160000
-      --merge-qkv
-      -ngl 999 --threads-batch 1
       -ctk q8_0 -ctv q8_0
-      --recurrent-ckpt-mode auto
-      --chat-template-file /models/qwen3.6-27b-gguf/chat_template-v11.jinja
     ttl: 3600
     filters:
-      # Clients won't be able to override these parameters
-      stripParams: "temperature, top_p, top_k, presence_penalty, repeat_penalty, min_p"
-
       # Baseline sampling params (thinking mode, general tasks)
       setParams:
         temperature: 1.0
@@ -128,14 +120,15 @@ models:
         min_p: 0.0
         presence_penalty: 1.5
         repeat_penalty: 1.0
-        chat_template_kwargs:
-          preserve_thinking: true
 
       setParamsByID:
         # Thinking mode, precise coding tasks (WebDev, code generation)
         "${MODEL_ID}:code":
           temperature: 0.6
           presence_penalty: 0.0
+          parallel_tool_calls: true
+          chat_template_kwargs:
+            preserve_thinking: true
 
         # Instruct (non-thinking) mode — general tasks, fast conversational responses
         "${MODEL_ID}:instruct":
@@ -143,3 +136,65 @@ models:
           top_p: 0.8
           chat_template_kwargs:
             enable_thinking: false
+
+  # unlisted testing configurations
+  "qwen3.6-27b-reasoning-format-none":
+    unlisted: true
+    proxy: "http://127.0.0.1:9999"
+    cmd: |
+      /app/llama-server
+      --port 9999
+      --parallel 1
+      --webui llamacpp
+      --jinja
+      --ctx-checkpoints 8
+      --ctx-checkpoints-interval 8192
+      --merge-qkv
+      -ngl 999 --threads-batch 1
+      --recurrent-ckpt-mode auto
+      --chat-template-file /models/qwen3.6-27b-gguf/chat_template-v19.jinja
+      --reasoning-format none
+      --reasoning-budget 16384
+      --model /models/qwen3.6-27b-gguf/ubergarm-iq4ks/Qwen3.6-27B-MTP-IQ4_KS.gguf
+      --mmproj /models/qwen3.6-27b-gguf/mmproj-F16.gguf
+      --ctx-size 160000
+      -ctk q8_0 -ctv q8_0
+  "qwen3.6-27b-reasoning-format-deepseek-legacy":
+    unlisted: true
+    proxy: "http://127.0.0.1:9999"
+    cmd: |
+      /app/llama-server
+      --port 9999
+      --parallel 1
+      --webui llamacpp
+      --jinja
+      --ctx-checkpoints 8
+      --ctx-checkpoints-interval 8192
+      --merge-qkv
+      -ngl 999 --threads-batch 1
+      --recurrent-ckpt-mode auto
+      --chat-template-file /models/qwen3.6-27b-gguf/chat_template-v19.jinja
+      --reasoning-format deepseek-legacy
+      --reasoning-budget 16384
+      --model /models/qwen3.6-27b-gguf/ubergarm-iq4ks/Qwen3.6-27B-MTP-IQ4_KS.gguf
+      --mmproj /models/qwen3.6-27b-gguf/mmproj-F16.gguf
+      --ctx-size 160000
+      -ctk q8_0 -ctv q8_0
+  "qwen3.6-27b-no-template":
+    unlisted: true
+    proxy: "http://127.0.0.1:9999"
+    cmd: |
+      /app/llama-server
+      --port 9999
+      --parallel 1
+      --webui llamacpp
+      --ctx-checkpoints 8
+      --ctx-checkpoints-interval 8192
+      --merge-qkv
+      -ngl 999 --threads-batch 1
+      --recurrent-ckpt-mode auto
+      --reasoning-budget 16384
+      --model /models/qwen3.6-27b-gguf/ubergarm-iq4ks/Qwen3.6-27B-MTP-IQ4_KS.gguf
+      --mmproj /models/qwen3.6-27b-gguf/mmproj-F16.gguf
+      --ctx-size 160000
+      -ctk q8_0 -ctv q8_0

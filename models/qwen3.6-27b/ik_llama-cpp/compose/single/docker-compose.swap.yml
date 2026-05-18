@@ -54,7 +54,7 @@
 
 services:
   ik-llama-cpp-qwen36-27b:
-    image: ghcr.io/ikawrakow/ik-llama-cpp:cu13-swap-4480
+    image: ghcr.io/ikawrakow/ik-llama-cpp:cu13-swap-4494
     container_name: ik-llama-cpp-qwen36-27b
     restart: unless-stopped
     ports:
@@ -62,6 +62,7 @@ services:
     volumes:
       - "${MODEL_DIR:-../../../../../models-cache}:/models:ro"
       - "./ik_llama-swap.config.yaml:/app/config.yaml:ro"
+    mem_limit: 16G
     deploy:
       resources:
         reservations:
