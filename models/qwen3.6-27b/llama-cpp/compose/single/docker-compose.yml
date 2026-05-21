@@ -130,7 +130,6 @@ services:
       - |
         set -e
         EXTRA_ARGS=()
-
         # MTP spec-decode toggle. We do NOT strip --mmproj anymore — MTP +
         # vision coexist on build 9235 (sweep-verified 2026-05-19). Earlier
         # composes stripped it defensively; that rule is obsolete.
@@ -140,7 +139,10 @@ services:
           EXTRA_ARGS+=("--spec-draft-n-max" "$${MTP_DRAFT_N_MAX:-2}")
           echo "[entrypoint] MTP_ENABLED=1 — added --spec-type draft-mtp --spec-draft-n-max $${MTP_DRAFT_N_MAX:-2}"
         fi
-
+        if [ "${PRESERVE_THINKING:-0}" = "1" ]; then
+          EXTRA_ARGS+=("--chat-template-kwargs" '{"preserve_thinking":true}')
+          echo "[entrypoint] PRESERVE_THINKING=1 — thinking content from all preceding turns is preserved in messages"
+        fi
         exec /app/llama-server "$$@" "$${EXTRA_ARGS[@]}"
       - --
     command:
@@ -174,6 +176,8 @@ services:
       # as hygiene — with REASONING=off the model emits no <think>, so
       # `content` is clean for all clients (incl. opencode, #97 obsolete).
       - --jinja
+      - --chat-template-file
+      - /models/qwen3.6-27b-gguf/chat_template-v11.jinja
       - --reasoning
       - ${REASONING:-off}
       - --reasoning-format

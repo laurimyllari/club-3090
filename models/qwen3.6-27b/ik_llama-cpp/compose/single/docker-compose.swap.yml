@@ -54,7 +54,7 @@
 
 services:
   ik-llama-cpp-qwen36-27b:
-    image: ghcr.io/ikawrakow/ik-llama-cpp:cu13-swap-4494
+    image: ghcr.io/ikawrakow/ik-llama-cpp:cu13-swap-4520
     container_name: ik-llama-cpp-qwen36-27b
     restart: unless-stopped
     ports:
