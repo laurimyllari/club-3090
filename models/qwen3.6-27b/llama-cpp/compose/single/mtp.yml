@@ -96,6 +96,7 @@ services:
       --jinja
       --reasoning ${REASONING:-off}
       --reasoning-format ${REASONING_FORMAT:-deepseek}
+      --chat-template-file /models/qwen3.6-27b-gguf/chat_template-v19.jinja
     deploy:
       resources:
         reservations:

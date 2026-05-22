@@ -37,21 +37,16 @@ services:
       - "8080"
       - -m
       - /models/${GGUF_FILE:-qwen3.6-27b-gguf/ubergarm-iq4ks/Qwen3.6-27B-MTP-IQ4_KS.gguf}
-      - --mmproj
-      - /models/${MMPROJ_FILE:-qwen3.6-27b-gguf/mmproj-F16.gguf}
-      - -ngl
-      - "99"
+      # - --mmproj
+      # - /models/${MMPROJ_FILE:-qwen3.6-27b-gguf/mmproj-F16.gguf}
       - -c
       - "122880"
-      - -ngld
-      - "99"
-      - -cd
-      - "4096"
-      - --multi-token-prediction
-      - --draft-max
-      - "2"
-      - --draft-p-min
-      - "0.0"
+      - --fit
+      # - --multi-token-prediction
+      # - --draft-max
+      # - "2"
+      # - --draft-p-min
+      # - "0.0"
       - --cache-type-k
       - q8_0
       - --cache-type-v
@@ -69,9 +64,9 @@ services:
       - --image-min-tokens
       - "1024"
       - --threads
-      - "6"
+      - "8"
       - --threads-batch
-      - "6"
+      - "8"
       - --flash-attn
       - on
       - --parallel
@@ -82,8 +77,8 @@ services:
       - "512"
       - --no-mmap
       - --jinja
-      - --chat-template-file
-      - /models/qwen3.6-27b-gguf/chat_template-v19.jinja
+      # - --chat-template-file
+      # - /models/qwen3.6-27b-gguf/chat_template-v19.jinja
       - --reasoning-budget
       - "1024"
       - --reasoning-budget-message
